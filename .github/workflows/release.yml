@@ -56,7 +56,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
-          releaseName: '日报工具 ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}'
+          releaseName: 日报工具 ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
           releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
