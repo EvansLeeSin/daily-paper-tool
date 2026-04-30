@@ -8,6 +8,7 @@ import {
   getWeekSummary,
   initDb,
   listWorkItems,
+  moveWorkItemToDate,
   replaceWorkItems,
   saveWeekSummary,
   type WorkItem,
@@ -44,6 +45,11 @@ const editModalOpen = ref(false);
 const editDate = ref<Dayjs>(dayjs());
 const editContents = ref<string[]>([""]);
 const editSaving = ref(false);
+
+const draggingItemId = ref<number | null>(null);
+const draggingFromDate = ref<string>("");
+const dropTargetDate = ref<string>("");
+const movingItem = ref(false);
 
 const weekLabel = computed(() => {
   const start = selectedWeekStart.value;
@@ -148,7 +154,7 @@ async function handleFetchWeek() {
 
 async function handlePolish(card: DailyCard) {
   if (card.items.length === 0) {
-    message.warning("请先读取当天 Git 记录");
+    message.warning("请先准备当天工作内容");
     return;
   }
 
@@ -162,15 +168,21 @@ async function handlePolish(card: DailyCard) {
       date: card.dateStr,
       itemsJson: JSON.stringify(rawItems),
     });
+
+    if (!polished.length) {
+      message.warning("AI 润色未返回有效结果，原记录已保留");
+      return;
+    }
+
     await replaceWorkItems(
       card.dateStr,
-      polished.slice(0, 4).map((content) => ({
+      polished.map((content) => ({
         content,
         source: "manual" as const,
       }))
     );
     await loadWeek();
-    message.success("AI 润色完成");
+    message.success(`AI 润色完成，已整理为 ${polished.length} 条`);
   } catch (error) {
     message.error(`AI 润色失败: ${error}`);
   } finally {
@@ -185,10 +197,6 @@ function openEditModal(card: DailyCard) {
 }
 
 function addEditRow() {
-  if (editContents.value.length >= 4) {
-    message.warning("每天最多保留 4 条内容");
-    return;
-  }
   editContents.value.push("");
 }
 
@@ -204,10 +212,6 @@ async function handleEditSave() {
   const rows = editContents.value.map((value) => value.trim()).filter(Boolean);
   if (rows.length === 0) {
     message.warning("请至少保留一条工作内容");
-    return;
-  }
-  if (rows.length > 4) {
-    message.warning("每天最多保留 4 条内容");
     return;
   }
 
@@ -279,6 +283,55 @@ function sourceLabel(source: string) {
 function sourceColor(source: string) {
   return source === "git" ? "geekblue" : "";
 }
+
+function handleDragStart(item: WorkItem) {
+  draggingItemId.value = item.id;
+  draggingFromDate.value = item.work_date;
+}
+
+function handleDragEnd() {
+  draggingItemId.value = null;
+  draggingFromDate.value = "";
+  dropTargetDate.value = "";
+}
+
+function handleDragOver(card: DailyCard, event: DragEvent) {
+  if (!draggingItemId.value || card.dateStr === draggingFromDate.value) {
+    return;
+  }
+  event.preventDefault();
+  dropTargetDate.value = card.dateStr;
+}
+
+function handleDragLeave(card: DailyCard) {
+  if (dropTargetDate.value === card.dateStr) {
+    dropTargetDate.value = "";
+  }
+}
+
+async function handleDrop(card: DailyCard, event: DragEvent) {
+  event.preventDefault();
+  const itemId = draggingItemId.value;
+  const fromDate = draggingFromDate.value;
+  dropTargetDate.value = "";
+
+  if (!itemId || !fromDate || fromDate === card.dateStr) {
+    handleDragEnd();
+    return;
+  }
+
+  movingItem.value = true;
+  try {
+    await moveWorkItemToDate(itemId, card.dateStr);
+    await loadWeek();
+    message.success(`已移动到 ${card.dateStr}`);
+  } catch (error) {
+    message.error(`移动失败: ${error}`);
+  } finally {
+    movingItem.value = false;
+    handleDragEnd();
+  }
+}
 </script>
 
 <template>
@@ -305,7 +358,7 @@ function sourceColor(source: string) {
     </div>
 
     <div class="panel-tip">
-      自动读取只抓本地 Git 提交。AI 润色后每天最多保留 4 条内容。
+      自动读取不会限制每日 Git 记录数量。导出 Word 周报时，每天只取前 4 条。支持把单条记录拖拽到其他日期。
     </div>
 
     <div v-if="!loading" class="week-grid">
@@ -314,22 +367,38 @@ function sourceColor(source: string) {
         :key="card.dateStr"
         :title="`${card.dateStr}（${card.weekday}）`"
         class="day-card"
+        :class="{ 'drop-active': dropTargetDate === card.dateStr }"
       >
-        <div v-if="card.items.length === 0" class="empty-text">暂无记录</div>
-        <ul v-else class="work-list">
-          <li v-for="item in card.items" :key="item.id" class="work-item">
-            <a-tag v-if="sourceLabel(item.source)" :color="sourceColor(item.source)" class="source-tag">
-              {{ sourceLabel(item.source) }}
-            </a-tag>
-            <span>{{ item.content }}</span>
-          </li>
-        </ul>
+        <div
+          class="card-drop-zone"
+          @dragover="handleDragOver(card, $event)"
+          @dragleave="handleDragLeave(card)"
+          @drop="handleDrop(card, $event)"
+        >
+          <div v-if="card.items.length === 0" class="empty-text">暂无记录，可拖拽其他日期的记录到这里</div>
+          <ul v-else class="work-list">
+            <li
+              v-for="item in card.items"
+              :key="item.id"
+              class="work-item"
+              :class="{ dragging: draggingItemId === item.id }"
+              draggable="true"
+              @dragstart="handleDragStart(item)"
+              @dragend="handleDragEnd"
+            >
+              <a-tag v-if="sourceLabel(item.source)" :color="sourceColor(item.source)" class="source-tag">
+                {{ sourceLabel(item.source) }}
+              </a-tag>
+              <span>{{ item.content }}</span>
+            </li>
+          </ul>
+        </div>
         <template #actions>
           <a-button
             type="text"
             size="small"
             :loading="card.fetchLoading"
-            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading"
+            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading || movingItem"
             @click="handleAutoFetch(card)"
           >
             读取 Git
@@ -338,7 +407,7 @@ function sourceColor(source: string) {
             type="text"
             size="small"
             :loading="card.polishLoading"
-            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading"
+            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading || movingItem"
             @click="handlePolish(card)"
           >
             AI 润色
@@ -346,7 +415,7 @@ function sourceColor(source: string) {
           <a-button
             type="text"
             size="small"
-            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading"
+            :disabled="card.fetchLoading || card.polishLoading || fetchWeekLoading || movingItem"
             @click="openEditModal(card)"
           >
             编辑
@@ -385,7 +454,7 @@ function sourceColor(source: string) {
         <a-form-item label="日期">
           <a-date-picker v-model:value="editDate" format="YYYY-MM-DD" disabled />
         </a-form-item>
-        <a-form-item label="工作内容（最多 4 条）">
+        <a-form-item label="工作内容">
           <div class="dynamic-list">
             <div v-for="(_row, index) in editContents" :key="index" class="dynamic-row">
               <a-input v-model:value="editContents[index]" placeholder="输入一条工作内容" />
@@ -447,6 +516,12 @@ function sourceColor(source: string) {
   min-height: 180px;
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.day-card.drop-active {
+  box-shadow: 0 0 0 2px #1677ff inset;
+  transform: translateY(-2px);
 }
 
 .day-card :deep(.ant-card-body) {
@@ -457,6 +532,11 @@ function sourceColor(source: string) {
 
 .day-card :deep(.ant-card-actions) {
   margin-top: 0;
+}
+
+.card-drop-zone {
+  flex: 1;
+  min-height: 120px;
 }
 
 .dynamic-list {
@@ -483,6 +563,17 @@ function sourceColor(source: string) {
   gap: 4px;
   margin-bottom: 6px;
   line-height: 1.5;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: grab;
+}
+
+.work-item:hover {
+  background: rgba(22, 119, 255, 0.06);
+}
+
+.work-item.dragging {
+  opacity: 0.45;
 }
 
 .source-tag {

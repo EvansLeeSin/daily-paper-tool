@@ -68,7 +68,7 @@ export async function addWorkItem(workDate: string, content: string, source: 'gi
 export async function listWorkItems(startDate: string, endDate: string) {
   const db = await getDb();
   const rows = await db.select<WorkItem[]>(
-    "SELECT * FROM work_items WHERE work_date >= ? AND work_date <= ? ORDER BY work_date ASC, id ASC",
+    "SELECT * FROM work_items WHERE work_date >= ? AND work_date <= ? ORDER BY work_date ASC, created_at ASC, id ASC",
     [startDate, endDate]
   );
   return rows;
@@ -84,6 +84,15 @@ export async function replaceWorkItems(workDate: string, items: Array<{ content:
       [workDate, item.content, item.source ?? 'manual', createdAt]
     );
   }
+}
+
+export async function moveWorkItemToDate(id: number, targetDate: string) {
+  const db = await getDb();
+  const updatedAt = new Date().toISOString();
+  await db.execute(
+    "UPDATE work_items SET work_date = ?, created_at = ? WHERE id = ?",
+    [targetDate, updatedAt, id]
+  );
 }
 
 export async function listWorkItemsPage(limit: number, offset: number) {

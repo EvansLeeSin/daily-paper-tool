@@ -194,8 +194,8 @@ pub fn fetch_daily_items(config: &AppConfig, date: &str) -> Result<FetchedItems,
 pub fn polish_daily_items(config: &AppConfig, date: &str, raw_items: &[WorkItemWithSource]) -> Result<Vec<String>, String> {
     let commits = raw_items
         .iter()
-        .filter(|item| item.source == "git")
         .map(|item| item.content.clone())
+        .filter(|content| !content.trim().is_empty())
         .collect::<Vec<_>>();
 
     if commits.is_empty() {
