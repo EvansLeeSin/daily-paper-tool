@@ -4,44 +4,23 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to use for the draft release, for example v1.0.3'
+        required: true
+        default: 'v1.0.3'
 
 permissions:
   contents: write
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'macos-latest'
-            args: '--target universal-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: '--bundles deb'
-          - platform: 'windows-latest'
-            args: ''
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libgtk-3-dev \
-            libsoup-3.0-dev \
-            javascriptcoregtk-4.1-dev \
-            file \
-            libssl-dev \
-            pkg-config
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -55,8 +34,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -66,8 +43,7 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      - name: Setup WiX (Windows only)
-        if: matrix.platform == 'windows-latest'
+      - name: Setup WiX
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile "wix314-binaries.zip"
@@ -79,9 +55,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: '日报工具 ${{ github.ref_name }}'
+          tagName: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
+          releaseName: '日报工具 ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}'
           releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: '--bundles nsis'
