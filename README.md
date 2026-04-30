@@ -1,91 +1,60 @@
-# 日报工具 (Daily Paper Tool)
+# 周报工具 (Daily Paper Tool)
 
-一个基于 Tauri + Vue 3 的跨平台桌面应用，用于自动生成工作日报和周报。通过集成 Jira 和 GitLab，自动获取工作任务和代码提交记录，并借助 AI 模型生成规范化的工作内容描述。
+一个基于 Tauri + Vue 3 的桌面应用，用于从**本地 Git 仓库**提取工作记录，结合 **OpenAI 兼容接口**进行润色，并导出固定格式的 **Word 周报**。
+
+当前版本已经收缩成两个核心能力：
+
+- 读取本地 Git 提交，整理为当天工作内容
+- 生成并导出固定格式的 Word 周报
 
 ## 功能特性
 
-- **自动获取工作内容** - 从 Jira 获取当日完成的任务，从 GitLab 获取代码提交记录
-- **AI 智能润色** - 支持 OpenAI 兼容接口，自动将原始数据转换为规范的日报要点
-- **本地数据存储** - 基于 SQLite 的本地数据库，所有数据安全存储在本地
-- **周报导出** - 一键导出本周工作内容为 Excel 文件
-- **跨平台支持** - 支持 macOS、Windows 和 Linux
+- **本地 Git 获取**：按天读取本地仓库当前分支的提交记录，按作者名或邮箱过滤
+- **AI 润色**：支持自定义 OpenAI 兼容 API，将原始提交信息整理成更适合周报的中文工作项
+- **每日最多 4 条**：AI 润色和手动编辑都控制在每天最多 4 条内容
+- **Word 周报导出**：导出接近固定模板样式的 `.docx` 周报
+- **本地数据存储**：基于 SQLite 保存工作记录和周总结
+- **Windows 在线打包**：已配置 GitHub Actions，只打 Windows NSIS 安装包
 
 ## 技术栈
 
-- **前端**: Vue 3 + TypeScript + Ant Design Vue + Vite
-- **后端**: Tauri v2 + Rust
-- **数据库**: SQLite (tauri-plugin-sql)
-- **文档生成**: docx-rs (Word) + rust_xlsxwriter (Excel)
+- **前端**：Vue 3 + TypeScript + Ant Design Vue + Vite
+- **后端**：Tauri v2 + Rust
+- **数据库**：SQLite (`tauri-plugin-sql`)
+- **文档生成**：`docx-rs`
 
-## 安装
+## 当前使用方式
 
-### 从 Release 下载
-
-前往 [Releases](https://github.com/xyunjie/daily-paper-generator/releases) 页面下载对应平台的安装包：
-
-- **macOS**: `.dmg` 文件
-- **Windows**: `.msi` 或 NSIS 安装程序
-- **Linux**: `.deb` 或 `.AppImage`
-
-### 从源码构建
-
-#### 环境要求
-
-- Node.js 18+
-- pnpm 9+
-- Rust 1.70+
-- 系统依赖（参考 [Tauri 官方文档](https://tauri.app/start/prerequisites/)）
-
-#### 构建步骤
-
-```bash
-# 克隆仓库
-git clone https://github.com/xyunjie/daily-paper-generator.git
-cd daily-paper-generator
-
-# 安装依赖
-pnpm install
-
-# 开发模式
-pnpm tauri dev
-
-# 构建生产版本
-pnpm tauri build
-```
+1. 在「配置」页填写：
+   - 本地 Git 仓库路径
+   - Git 作者名或作者邮箱
+   - AI 接口 `base_url / api_key / model`
+   - 员工姓名、默认日工时、默认完成度、总结备注
+2. 在首页点击「读取本周 Git」
+3. 按天点击「AI 润色」
+4. 需要时点击「AI 总结」
+5. 点击「导出周报」，生成 `.docx`
 
 ## 配置说明
 
-首次使用需要在「配置」页面完成以下设置：
+首次使用需要在「配置」页面完成以下设置。
 
-### Jira 配置
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| Jira URL | Jira 服务器地址 | `https://your-company.atlassian.net` |
-| 邮箱 | 登录邮箱 | `your@email.com` |
-| API Token | Jira API Token | [获取方式](https://id.atlassian.com/manage-profile/security/api-tokens) |
-| 用户名 | Jira 用户名 | `zhangsan` |
-
-### GitLab 配置
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| GitLab URL | GitLab 服务器地址 | `https://gitlab.com` |
-| Private Token | 访问令牌 | [创建 Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) |
-| 用户名 | GitLab 用户名 | `zhangsan` |
-| 用户 ID | GitLab 用户 ID（可选） | `123456` |
-
-> **提示**: 如果填写了用户 ID，将使用 Events API 获取提交记录，速度更快；否则使用项目遍历方式。
-
-### 通用配置
+### 本地 Git 配置
 
 | 字段 | 说明 |
 |------|------|
-| 用户邮箱 | 用于匹配 Git 提交记录的作者邮箱 |
+| 仓库路径 | 每行一个本地 Git 仓库路径 |
+| Git 作者名 | 用于过滤提交作者 |
+| Git 作者邮箱 | 用于过滤提交作者 |
 
-### 模型配置（可选）
+说明：
 
-支持任意 OpenAI 兼容的 API 接口，用于智能润色日报内容：
+- 作者名和作者邮箱至少填写一个
+- 当前默认只读取每个仓库**当前分支**的提交
+
+### 模型配置
+
+支持任意 OpenAI 兼容接口。
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
@@ -93,115 +62,157 @@ pnpm tauri build
 | API Key | API 密钥 | `sk-...` |
 | Model | 模型名称 | `gpt-4o-mini` |
 
-> **注意**: 如果不配置模型，系统会使用本地规则算法生成日报内容。
+### 周报导出配置
 
-## 使用指南
+| 字段 | 说明 |
+|------|------|
+| 员工姓名 | 导出 Word 时写入员工栏 |
+| 默认日工时 | 用于自动分摊当天时长 |
+| 默认完成度 | 默认填入“任务完成度和困难”列 |
+| 总结备注 | 导出周报最后一列备注内容 |
+
+### 提示词配置
+
+可选自定义：
+
+- AI 润色 System Prompt
+- AI 润色 Few-shot 示例
+- 周总结 System Prompt
+
+## 页面说明
 
 ### 本周工作
 
-首页展示本周（周一至周日）的工作内容卡片，每个卡片底部有三个操作按钮：
-
-1. **自动获取** - 从 Jira 和 GitLab 拉取当日原始数据，并标注来源（Jira/GitLab）
-2. **AI润色** - 对已获取的数据进行智能润色，生成规范的工作要点
-3. **编辑** - 手动编辑当日工作内容
-
-**使用流程**：
-- 点击「自动获取」按钮获取原始数据（会显示来源标签）
-- 如需AI优化，点击「AI润色」按钮（需配置模型）
-- 可随时点击「编辑」按钮手动调整内容
-- 点击「导出本周工作内容」生成 Excel 文件
-
-### 自动获取逻辑
-
-**自动获取**：
-- 从 Jira 获取当日完成的任务
-- 从 GitLab 获取代码提交记录
-- 保留原始内容，并标注来源（Jira/GitLab）
-
-**AI润色**（需配置模型）：
-- 合并 Jira 任务和 GitLab 提交信息
-- 去除 Jira Key、项目路径、提交 Hash 等技术细节
-- 生成 3-8 条规范的中文工作要点
+- 按周展示每天的工作内容卡片
+- 支持读取本周 Git、按天读取 Git、AI 润色、手动编辑、AI 总结、导出周报
 
 ### 工作记录
 
-- 按天聚合显示历史工作记录
-- 支持关键字搜索
-- 支持日期范围筛选
-- 分页浏览
+- 按天聚合查看历史工作内容
+- 支持关键字搜索和日期范围筛选
+
+### 配置
+
+- 管理本地 Git、模型、周报导出参数和提示词
+
+## 导出格式
+
+当前导出为 `.docx`，整体结构贴近固定周报模板：
+
+- 标题：`工作周报（YYYY.MM.DD-MM.DD）`
+- 员工：`员工：姓名`
+- 表格列：
+  - 日期
+  - 工作内容
+  - 花费时长
+  - 任务完成度和困难
+- 每天固定保留 4 行
+- 总结行包含：
+  - 总结
+  - 周总结内容
+  - 总时长
+  - 备注
+
+## 从源码运行
+
+### 环境要求
+
+- Node.js 18+
+- pnpm 9+
+- Rust 1.70+
+- Windows 打包时需要 Visual Studio C++ Build Tools
+
+### 开发命令
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+### 前端静态检查
+
+```bash
+pnpm exec vue-tsc --noEmit
+pnpm build
+```
+
+## 在线打包
+
+仓库已配置 GitHub Actions 在线打包，只生成 **Windows NSIS 安装包**。
+
+### 触发方式 1：手动运行
+
+1. 打开 GitHub 仓库的 `Actions`
+2. 选择 `Release`
+3. 点击 `Run workflow`
+4. 输入一个新的 `release_tag`，例如 `v1.0.3`
+5. 等待构建完成
+6. 到 `Releases` 页面下载 Windows 安装包
+
+### 触发方式 2：推送 tag
+
+```bash
+git tag v1.0.3
+git push origin v1.0.3
+```
 
 ## 项目结构
 
-```
+```text
 daily-paper-tool/
-├── src/                    # Vue 前端源码
-│   ├── pages/              # 页面组件
-│   │   ├── Home.vue        # 本周工作
-│   │   ├── Records.vue     # 工作记录
-│   │   └── Settings.vue    # 配置页面
-│   ├── db/                 # 数据库操作
-│   ├── router/             # 路由配置
-│   └── utils/              # 工具函数
-├── src-tauri/              # Tauri Rust 后端
+├── src/
+│   ├── db/                  # SQLite 访问
+│   ├── pages/
+│   │   ├── Home.vue         # 本周工作
+│   │   ├── Records.vue      # 工作记录
+│   │   └── Settings.vue     # 配置页面
+│   ├── router/              # 路由
+│   └── utils/               # 前端工具
+├── src-tauri/
 │   └── src/
-│       ├── lib.rs          # 入口
-│       ├── config.rs       # 配置管理
-│       ├── jira.rs         # Jira API 集成
-│       ├── gitlab.rs       # GitLab API 集成
-│       ├── fetch.rs        # 数据获取与整合
-│       ├── llm.rs          # AI 模型调用
-│       └── report.rs       # 报告生成
-└── .github/workflows/      # GitHub Actions
-    └── release.yml         # 自动构建发布
+│       ├── config.rs        # 配置模型
+│       ├── local_git.rs     # 本地 Git 读取
+│       ├── fetch.rs         # 数据获取与 AI 润色入口
+│       ├── llm.rs           # OpenAI 兼容接口调用
+│       ├── report.rs        # Word 周报导出
+│       ├── lib.rs           # Tauri commands
+│       └── utils.rs         # 通用文本处理
+└── .github/workflows/
+    └── release.yml          # Windows 在线打包
 ```
 
-## 开发
+## 数据库
 
-### 常用命令
-
-```bash
-# 前端开发
-pnpm dev
-
-# Tauri 开发（前端 + Rust）
-pnpm tauri dev
-
-# 构建前端
-pnpm build
-
-# 构建桌面应用
-pnpm tauri build
-```
-
-### 数据库表结构
+当前主要使用两张表：
 
 ```sql
 CREATE TABLE work_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    work_date TEXT NOT NULL,      -- 工作日期 YYYY-MM-DD
-    content TEXT NOT NULL,        -- 工作内容
-    source TEXT DEFAULT 'manual', -- 来源: jira/gitlab/manual
-    created_at TEXT NOT NULL      -- 创建时间
+    work_date TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source TEXT DEFAULT 'manual',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE week_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_start TEXT NOT NULL UNIQUE,
+    summary TEXT NOT NULL,
+    key_tasks TEXT DEFAULT '',
+    completion_status TEXT DEFAULT '',
+    updated_at TEXT NOT NULL
 );
 ```
 
-## 发布流程
+说明：
 
-项目使用 GitHub Actions 自动构建和发布：
+- 目前 `week_summaries` 里保留了历史字段 `key_tasks` / `completion_status`
+- 当前页面主流程已经不再依赖它们
 
-1. 更新版本号（`package.json` 和 `tauri.conf.json`）
-2. 创建并推送 tag：
-   ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-3. GitHub Actions 自动构建三个平台的安装包
-4. 构建完成后，在 Releases 页面编辑并发布草稿
+## 仓库地址
+
+- GitHub 仓库：<https://github.com/EvansLeeSin/daily-paper-tool>
 
 ## 许可证
 
 MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
